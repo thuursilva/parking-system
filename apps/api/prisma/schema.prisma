@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum VehicleType {
+  CAR
+  MOTORCYCLE
+}
+
+enum SpotStatus {
+  FREE
+  OCCUPIED
+  MAINTENANCE
+}
+
+enum TicketStatus {
+  OPEN
+  PAID
+  CANCELED
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+  CASH
+}
+
+model spots {
+  id        String      @id @default(uuid())
+  code      String      @unique
+  type      VehicleType
+  status    SpotStatus  @default(FREE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  tickets      tickets[]
+  monthlyPlans monthly_plans[]
+
+  @@index([type, status])
+}
+
+model vehicles {
+  id        String      @id @default(uuid())
+  plate     String      @unique
+  type      VehicleType
+  createdAt DateTime    @default(now())
+
+  tickets      tickets[]
+  monthlyPlans monthly_plans[]
+}
+
+model pricing_rules {
+  id                      String      @id @default(uuid())
+  name                    String
+  vehicleType             VehicleType
+  toleranceMinutes        Int         @default(15)
+  firstPeriodMinutes      Int         @default(60)
+  firstPeriodPrice        Decimal     @db.Decimal(10, 2)
+  additionalPeriodMinutes Int         @default(60)
+  additionalPeriodPrice   Decimal     @db.Decimal(10, 2)
+  dailyMaxPrice           Decimal?    @db.Decimal(10, 2)
+  validFrom               DateTime    @default(now())
+  validUntil              DateTime?
+  active                  Boolean     @default(true)
+  createdAt               DateTime    @default(now())
+
+  tickets tickets[]
+
+  @@index([vehicleType, active])
+}
+
+model tickets {
+  id            String       @id @default(uuid())
+  number        Int          @unique @default(autoincrement())
+  vehicleId     String
+  spotId        String
+  pricingRuleId String?
+  entryAt       DateTime     @default(now())
+  exitAt        DateTime?
+  amount        Decimal?     @db.Decimal(10, 2)
+  status        TicketStatus @default(OPEN)
+  createdAt     DateTime     @default(now())
+
+  vehicle     vehicles       @relation(fields: [vehicleId], references: [id])
+  spot        spots          @relation(fields: [spotId], references: [id])
+  pricingRule pricing_rules? @relation(fields: [pricingRuleId], references: [id])
+  payment     payments?
+
+  @@index([vehicleId, status])
+  @@index([spotId, status])
+  @@index([entryAt])
+}
+
+model payments {
+  id       String        @id @default(uuid())
+  ticketId String        @unique
+  method   PaymentMethod
+  amount   Decimal       @db.Decimal(10, 2)
+  paidAt   DateTime      @default(now())
+
+  ticket tickets @relation(fields: [ticketId], references: [id])
+}
+
+model customers {
+  id        String   @id @default(uuid())
+  name      String
+  document  String?  @unique
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+
+  monthlyPlans monthly_plans[]
+}
+
+model monthly_plans {
+  id         String    @id @default(uuid())
+  customerId String
+  vehicleId  String
+  spotId     String?
+  price      Decimal   @db.Decimal(10, 2)
+  weekDays   Int[]
+  startTime  String?
+  endTime    String?
+  startsAt   DateTime
+  endsAt     DateTime?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  customer customers @relation(fields: [customerId], references: [id])
+  vehicle  vehicles  @relation(fields: [vehicleId], references: [id])
+  spot     spots?    @relation(fields: [spotId], references: [id])
+
+  @@index([customerId])
+  @@index([vehicleId, active])
+}
